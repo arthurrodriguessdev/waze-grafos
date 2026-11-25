@@ -3,193 +3,157 @@
 #include <string.h>
 
 // => Definição de estruturas
-typedef struct Cidade{
-    char nome[100];
-    int identificador;
-    struct Cidade *proximaCidade;
+typedef struct Ponto{
+    int id;
+    // struct Cidade *proximaCidade;
     struct Aresta *ligacoesCidades;
-} Cidade;
+} Ponto;
+
+typedef struct No{
+    char nome[50];
+    struct No *esquerda;
+    struct No *direita;
+    double latitude;
+    double longitude;
+    int id;
+} No;
 
 typedef struct Grafo{
-    int quantidadeCidades;
-    Cidade *cidades;
+    int quantidadePontos;
+    Ponto *pontos;
+    No *raiz;
 } Grafo;
 
 typedef struct Aresta{
-    float distancia;
-    struct Aresta *proxima;
-    struct Cidade *cidadeDestino;
+    int idDestino;
+    struct Aresta *proximaAresta;
 } Aresta;
 
 // => Funções utilitárias (criação de objetos)
-Cidade *criarCidade(char *nomeCidade, int indiceCidade){
-    Cidade *novaCidade = malloc(sizeof(Cidade));
-    if(!novaCidade){
-        return NULL;
-    }
+Ponto *criarPonto(int id){
+    Ponto *novoPonto = malloc(sizeof(Ponto));
+    if(!novoPonto){ return NULL; }
 
-    strcpy(novaCidade->nome, nomeCidade);
-    novaCidade->identificador = indiceCidade;
-    novaCidade->ligacoesCidades = NULL;
-    novaCidade->proximaCidade = NULL;
-    return novaCidade;
+    novoPonto->id = id;
+    novoPonto->ligacoesCidades = NULL;
+    return novoPonto;
 }
 
-Aresta *criarAresta(float distancia, Cidade *cidadeDestino){
+Aresta *criarAresta(int idDestino){
     Aresta *novaAresta = malloc(sizeof(Aresta));
     if(!novaAresta){ return NULL; }
 
-    novaAresta->cidadeDestino = cidadeDestino;
-    novaAresta->distancia = distancia;
-    novaAresta->proxima = NULL;
+    novaAresta->idDestino = idDestino;
+    novaAresta->proximaAresta = NULL;
     return novaAresta;
 }
 
-void iniciarGrafo(Grafo **grafo){
-    *grafo = malloc(sizeof(Grafo));
+No *criarNo(char nome[50], double latitude, double longitude, int id){
+    No *novoNo = malloc(sizeof(No));
+    if(!novoNo){ return NULL; }
 
-    if(*grafo){
-        (*grafo)->cidades = NULL;
-        (*grafo)->quantidadeCidades = 0;
-    }
+    strcpy(novoNo->nome, nome);
+    novoNo->latitude = latitude;
+    novoNo->longitude = longitude;
+    novoNo->id = id;
+    novoNo->esquerda = NULL;
+    novoNo->direita = NULL;
+    return novoNo;
 }
 
-int adicionarCidade(char *nomeCidade, Grafo **grafo){
-    Cidade *novaCidade = criarCidade(nomeCidade, (*grafo)->quantidadeCidades);
-    if(!novaCidade){
-        return 0;
-    }
+Grafo *criarGrafo(){
+    Grafo *novoGrafo = malloc(sizeof(Grafo));
+    if(!novoGrafo){ return NULL; }
 
-    Cidade *base = (*grafo)->cidades;
+    novoGrafo->pontos = NULL;
+    novoGrafo->quantidadePontos = 0;
+    novoGrafo->raiz = NULL;
+    return novoGrafo;
+}
 
-    // Se for a primeira cidade sendo cadastrada:
-    if(!base){
-        (*grafo)->cidades = novaCidade;
-        (*grafo)->quantidadeCidades++;
+// => Funções relacionadas às árvores
+int inserirArvore(char nome[50], double latitude, double longitude, int id, No **raiz){
+    if(!(*raiz)){
+        No *novoNo = criarNo(nome, latitude, longitude, id);
+        if(!novoNo){ return 0; }
+
+        (*raiz) = novoNo;
         return 1;
     }
 
-    // Caso não seja a primeira, busca a última na lista encadeada que vai apontar para a nova
-    while(base->proximaCidade != NULL){
-        base = base->proximaCidade;
+    if(id > (*raiz)->id){
+        return inserirArvore(nome, latitude, longitude, id, &(*raiz)->direita);
     }
 
-    base->proximaCidade = novaCidade;
-    (*grafo)->quantidadeCidades++;
-    return 1;
+    return inserirArvore(nome, latitude, longitude, id, &(*raiz)->esquerda);
 }
 
-void exibirCidades(Grafo *grafo){
-    Cidade *base = grafo->cidades;
-    
-    if(base != NULL){
-        while(base != NULL){
-            printf("=> [%d] - %s\n", base->identificador, base->nome);
-            base = base->proximaCidade;
-        }
+No *buscarArvore(int id, No **raiz){
+    if(!(*raiz)){
+        return NULL;
     }
+
+    if(id == (*raiz)->id){
+        return (*raiz);
+    }
+
+    if(id > (*raiz)->id){
+        return buscarArvore(id, &(*raiz)->direita);
+    }
+
+    return buscarArvore(id, &(*raiz)->esquerda);
 }
 
-// Aresta não direcionada (vai e volta)
-int adicionarAresta(Grafo **grafo, int idCidadeOrigem, int idCidadeDestino, float distancia){
-    if(!(*grafo)){ return 0; }
-    if(idCidadeDestino == idCidadeOrigem){ return 0; }
+void carregarGrafos(Grafo **grafo){
+    Grafo *novoGrafo = criarGrafo();
+    if(!novoGrafo){ return; }
 
-    Cidade *cidadeBase = (*grafo)->cidades;
-    if(!cidadeBase){ return 0; }
+    (*grafo) = novoGrafo;
 
-    Cidade *cidadeOrigem = NULL, *cidadeDestino = NULL;
-    while(cidadeBase != NULL){
-        if(cidadeBase->identificador == idCidadeOrigem){
-            cidadeOrigem = cidadeBase;
+    FILE *pontosCSV = fopen("../data/pontos_waze.csv", "rb");
+    if(!pontosCSV){ return; }
+
+    char linhaCSV[255];
+    char *token = NULL;
+    char vetorValores[4][255]; // Vai armazenar os tokens (dados divididos)
+    int indiceVetor;
+
+    int idPontoGravar;
+    char nomePontoGravar[50];
+    double latitudePontoGravar, longitudePontoGravar;
+
+    while(fgets(linhaCSV, sizeof(linhaCSV), pontosCSV)){
+        token = strtok(linhaCSV, ",");
+        indiceVetor = 0;
+
+        while(token){
+            strcpy(vetorValores[indiceVetor], token);
+            indiceVetor++;
+            token = strtok(NULL, ",");
         }
+        
+        // Faz o casting de char para os tipos esperados na struct "Ponto"
+        idPontoGravar = atoi(vetorValores[0]);
+        strcpy(nomePontoGravar, vetorValores[1]);
+        latitudePontoGravar = atof(vetorValores[2]);
+        longitudePontoGravar = atof(vetorValores[3]);
 
-        if(cidadeBase->identificador == idCidadeDestino){
-            cidadeDestino = cidadeBase;
-        }
+        Ponto *novoPontoGravar = criarPonto(idPontoGravar);
+        if(!novoPontoGravar){ return; }
+        
+        inserirArvore(
+            nomePontoGravar, 
+            latitudePontoGravar, 
+            longitudePontoGravar, 
+            idPontoGravar, 
+            &(*grafo)->raiz
+        );
 
-        cidadeBase = cidadeBase->proximaCidade;
-    }
-
-    // Encontrou as duas cidades (foram adicionadas)
-    if(cidadeOrigem && cidadeDestino){
-        Aresta *arestaOrigemParaDestino = criarAresta(distancia, cidadeDestino);
-        Aresta *arestaDestinoParaOrigem = criarAresta(distancia, cidadeOrigem);
-
-        // Se a criação das arestas funcionaram
-        if(arestaDestinoParaOrigem && arestaOrigemParaDestino){
-            Aresta *base = NULL;
-
-            // Origem -> Destino
-            if(!cidadeOrigem->ligacoesCidades){
-                cidadeOrigem->ligacoesCidades = arestaOrigemParaDestino;
-            } else{
-                base = cidadeOrigem->ligacoesCidades;
-                while(base->proxima != NULL){
-                    base = base->proxima;
-                }
-
-                base->proxima = arestaOrigemParaDestino;
-            }
-
-            // Destino -> Origem
-            if(!cidadeDestino->ligacoesCidades){
-                cidadeDestino->ligacoesCidades = arestaDestinoParaOrigem;
-            } else{
-                base = cidadeDestino->ligacoesCidades;
-                while(base->proxima != NULL){
-                    base = base->proxima;
-                }
-
-                base->proxima = arestaDestinoParaOrigem;
-            }
-
-            return 1;
-        }
-    }
-    
-    return 0;
-}
-
-void exibirCaminhos(Grafo *grafo){
-    if(!grafo || !grafo->cidades){
-        return;
-    }
-
-    Cidade *cidadeBase = grafo->cidades;
-    while(cidadeBase != NULL){
-        Aresta *arestaBase = cidadeBase->ligacoesCidades;
-
-        if(arestaBase){
-            printf("\nCAMINHOS DA CIDADE: %s\n", cidadeBase->nome);
-            while(arestaBase != NULL){
-                printf("- %s (%.2f km)\n",
-                    arestaBase->cidadeDestino->nome,
-                    arestaBase->distancia
-                );
-
-                arestaBase = arestaBase->proxima;
-            }
-
-        } else{
-            printf("\nSEM CAMINHOS PARA A CIDADE: %s\n", cidadeBase->nome);
-        }
-
-        cidadeBase = cidadeBase->proximaCidade;
     }
 }
 
 int main(){
     Grafo *grafo;
-    iniciarGrafo(&grafo);
-
-    adicionarCidade("Goiânia", &grafo);
-    adicionarCidade("Anápolis", &grafo);
-    adicionarCidade("Aparecida de Goiânia", &grafo);
-
-    adicionarAresta(&grafo, 0, 1, 800);
-    
-    exibirCidades(grafo);
-    exibirCaminhos(grafo);
+    carregarGrafos(&grafo);
     return 0;
 }
