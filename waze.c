@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct Ponto Ponto;
+typedef struct Aresta Aresta;
+
 // => Definição de estruturas
 typedef struct Ponto{
     int id;
@@ -22,6 +25,7 @@ typedef struct No{
 
 typedef struct Aresta{
     int idDestino;
+    struct Ponto *destino;
     struct Aresta *proximaAresta;
 } Aresta;
 
@@ -41,11 +45,12 @@ Ponto *criarPonto(int id){
     return novoPonto;
 }
 
-Aresta *criarAresta(int idDestino){
+Aresta *criarAresta(Ponto* destino){
     Aresta *novaAresta = malloc(sizeof(Aresta));
     if(!novaAresta){ return NULL; }
 
-    novaAresta->idDestino = idDestino;
+    novaAresta->destino = destino;
+    novaAresta->idDestino = novaAresta->destino->id;
     novaAresta->proximaAresta = NULL;
     return novaAresta;
 }
@@ -60,7 +65,7 @@ No *criarNo(char nome[50], double latitude, double longitude, int id, Ponto* pon
     novoNo->id = id;
     novoNo->esquerda = NULL;
     novoNo->direita = NULL;
-    novoPonto->ponto = ponto;
+    novoNo->ponto = ponto;
     return novoNo;
 }
 
@@ -105,6 +110,39 @@ No *buscarArvore(int id, No **raiz){
     }
 
     return buscarArvore(id, &(*raiz)->esquerda);
+}
+
+void adicionarArestas(Ponto* pontoOrigem, Ponto* pontoDestino){
+    if (pontoOrigem->ligacoesCidades == NULL) {
+        Aresta* aresta = malloc (sizeof(Aresta));
+
+        aresta->destino = pontoDestino;
+        aresta->idDestino = pontoDestino->id;
+        aresta->proximaAresta = NULL;
+
+        pontoOrigem->ligacoesCidades = aresta;
+    } else {
+        Aresta* i = pontoOrigem->ligacoesCidades;
+        while (i != NULL){
+            i = i->proximaAresta;
+        }
+    }
+}
+
+void carregarArestas(Grafo *grafo){
+    FILE* conexoesEntrePontos = fopen("../data/conexoes_entre_pontos.csv", "r");
+    if (!conexoesEntrePontos) return;
+
+    int pontoIdOrigem, pontoIdDestino = -1;
+
+    while(fscanf("%d,%d", pontoIdOrigem, pontoIdDestino)){
+        No* noOrigem = buscarArvore(pontoIdOrigem, grafo);
+        No* noDestino = buscarArvore(pontoIdDestino, grafo);
+
+        adicionarArestas(noOrigem->ponto, noDestino->ponto);
+        adicionarArestas(noDestino->ponto, noOrigem->ponto);
+    }
+
 }
 
 void carregarGrafos(Grafo **grafo){
