@@ -16,18 +16,20 @@ typedef struct No{
     double latitude;
     double longitude;
     int id;
+
+    Ponto* ponto;
 } No;
+
+typedef struct Aresta{
+    int idDestino;
+    struct Aresta *proximaAresta;
+} Aresta;
 
 typedef struct Grafo{
     int quantidadePontos;
     Ponto *pontos;
     No *raiz;
 } Grafo;
-
-typedef struct Aresta{
-    int idDestino;
-    struct Aresta *proximaAresta;
-} Aresta;
 
 // => Funções utilitárias (criação de objetos)
 Ponto *criarPonto(int id){
@@ -48,7 +50,7 @@ Aresta *criarAresta(int idDestino){
     return novaAresta;
 }
 
-No *criarNo(char nome[50], double latitude, double longitude, int id){
+No *criarNo(char nome[50], double latitude, double longitude, int id, Ponto* ponto){
     No *novoNo = malloc(sizeof(No));
     if(!novoNo){ return NULL; }
 
@@ -58,6 +60,7 @@ No *criarNo(char nome[50], double latitude, double longitude, int id){
     novoNo->id = id;
     novoNo->esquerda = NULL;
     novoNo->direita = NULL;
+    novoPonto->ponto = ponto;
     return novoNo;
 }
 
@@ -72,9 +75,9 @@ Grafo *criarGrafo(){
 }
 
 // => Funções relacionadas às árvores
-int inserirArvore(char nome[50], double latitude, double longitude, int id, No **raiz){
+int inserirArvore(char nome[50], double latitude, double longitude, int id, No **raiz, Ponto* ponto){
     if(!(*raiz)){
-        No *novoNo = criarNo(nome, latitude, longitude, id);
+        No *novoNo = criarNo(nome, latitude, longitude, id, ponto);
         if(!novoNo){ return 0; }
 
         (*raiz) = novoNo;
@@ -82,10 +85,10 @@ int inserirArvore(char nome[50], double latitude, double longitude, int id, No *
     }
 
     if(id > (*raiz)->id){
-        return inserirArvore(nome, latitude, longitude, id, &(*raiz)->direita);
+        return inserirArvore(nome, latitude, longitude, id, &(*raiz)->direita, ponto);
     }
 
-    return inserirArvore(nome, latitude, longitude, id, &(*raiz)->esquerda);
+    return inserirArvore(nome, latitude, longitude, id, &(*raiz)->esquerda, ponto);
 }
 
 No *buscarArvore(int id, No **raiz){
@@ -146,7 +149,8 @@ void carregarGrafos(Grafo **grafo){
             latitudePontoGravar, 
             longitudePontoGravar, 
             idPontoGravar, 
-            &(*grafo)->raiz
+            &(*grafo)->raiz,
+            novoPontoGravar
         );
 
     }
