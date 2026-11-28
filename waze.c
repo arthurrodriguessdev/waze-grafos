@@ -29,7 +29,7 @@ typedef struct Aresta{
 
 typedef struct Grafo{
     int quantidadePontos;
-    Ponto *pontos;
+    // Ponto *pontos;
     No *raiz;
 } Grafo;
 
@@ -71,7 +71,7 @@ Grafo *criarGrafo(){
     Grafo *novoGrafo = malloc(sizeof(Grafo));
     if(!novoGrafo){ return NULL; }
 
-    novoGrafo->pontos = NULL;
+    // novoGrafo->pontos = NULL;
     novoGrafo->quantidadePontos = 0;
     novoGrafo->raiz = NULL;
     return novoGrafo;
@@ -189,7 +189,7 @@ void carregarGrafos(Grafo **grafo){
         Ponto *novoPontoGravar = criarPonto(idPontoGravar);
         if(!novoPontoGravar){ return; }
         
-        inserirArvore(
+        int inseriu = inserirArvore(
             nomePontoGravar, 
             latitudePontoGravar, 
             longitudePontoGravar, 
@@ -197,6 +197,10 @@ void carregarGrafos(Grafo **grafo){
             &(*grafo)->raiz,
             novoPontoGravar
         );
+
+        if(inseriu){
+            (*grafo)->quantidadePontos++;
+        }
     }
 
     carregarArestas(*grafo);
