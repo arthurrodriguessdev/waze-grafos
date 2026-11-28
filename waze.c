@@ -8,7 +8,6 @@ typedef struct Aresta Aresta;
 // => Definição de estruturas
 typedef struct Ponto{
     int id;
-    // struct Cidade *proximaCidade;
     struct Aresta *ligacoesCidades;
 } Ponto;
 
@@ -19,7 +18,6 @@ typedef struct No{
     double latitude;
     double longitude;
     int id;
-
     Ponto* ponto;
 } No;
 
@@ -112,20 +110,24 @@ No *buscarArvore(int id, No **raiz){
     return buscarArvore(id, &(*raiz)->esquerda);
 }
 
+void lerPrimeiraLinha(FILE *arquivo){
+    char linha[255];
+    fgets(linha, sizeof(linha), arquivo);
+}
+
 void adicionarArestas(Ponto* pontoOrigem, Ponto* pontoDestino){
+    Aresta *novaAresta = criarAresta(pontoDestino);
+    if(!novaAresta){ return; }
+
     if (pontoOrigem->ligacoesCidades == NULL) {
-        Aresta* aresta = malloc (sizeof(Aresta));
-
-        aresta->destino = pontoDestino;
-        aresta->idDestino = pontoDestino->id;
-        aresta->proximaAresta = NULL;
-
-        pontoOrigem->ligacoesCidades = aresta;
+        pontoOrigem->ligacoesCidades = novaAresta;
     } else {
-        Aresta* i = pontoOrigem->ligacoesCidades;
-        while (i != NULL){
-            i = i->proximaAresta;
+        Aresta* arestaBase = pontoOrigem->ligacoesCidades;
+        while (arestaBase->proximaAresta != NULL){
+            arestaBase = arestaBase->proximaAresta;
         }
+
+        arestaBase->proximaAresta = novaAresta;
     }
 }
 
@@ -133,16 +135,20 @@ void carregarArestas(Grafo *grafo){
     FILE* conexoesEntrePontos = fopen("../data/conexoes_entre_pontos.csv", "r");
     if (!conexoesEntrePontos) return;
 
-    int pontoIdOrigem, pontoIdDestino = -1;
+    lerPrimeiraLinha(conexoesEntrePontos);
 
-    while(fscanf("%d,%d", pontoIdOrigem, pontoIdDestino)){
-        No* noOrigem = buscarArvore(pontoIdOrigem, grafo);
-        No* noDestino = buscarArvore(pontoIdDestino, grafo);
+    int pontoIdOrigem = -1, pontoIdDestino = -1;
+    while(fscanf(conexoesEntrePontos, "%d,%d", &pontoIdOrigem, &pontoIdDestino) == 2){
+        No* noOrigem = buscarArvore(pontoIdOrigem, &grafo->raiz);
+        No* noDestino = buscarArvore(pontoIdDestino, &grafo->raiz);
 
-        adicionarArestas(noOrigem->ponto, noDestino->ponto);
-        adicionarArestas(noDestino->ponto, noOrigem->ponto);
+        if(noOrigem && noDestino){
+            adicionarArestas(noOrigem->ponto, noDestino->ponto);
+            adicionarArestas(noDestino->ponto, noOrigem->ponto);
+        }
     }
 
+    fclose(conexoesEntrePontos);
 }
 
 void carregarGrafos(Grafo **grafo){
@@ -154,6 +160,7 @@ void carregarGrafos(Grafo **grafo){
     FILE *pontosCSV = fopen("../data/pontos_waze.csv", "rb");
     if(!pontosCSV){ return; }
 
+    lerPrimeiraLinha(pontosCSV);
     char linhaCSV[255];
     char *token = NULL;
     char vetorValores[4][255]; // Vai armazenar os tokens (dados divididos)
@@ -190,12 +197,59 @@ void carregarGrafos(Grafo **grafo){
             &(*grafo)->raiz,
             novoPontoGravar
         );
+    }
 
+    carregarArestas(*grafo);
+    fclose(pontosCSV);
+}
+
+// Percorre a árvore em ordem para mostrar os pontos salvos
+void mostrarPontos(No *raiz){
+    if(raiz){
+        mostrarPontos(raiz->esquerda);
+        printf(
+            "Ponto: [%d] %s\nLatitude: %.2f\nLongitude: %.2f\n", 
+            raiz->id,
+            raiz->nome,
+            raiz->latitude,
+            raiz->longitude
+        );
+        printf("\n");
+
+        mostrarPontos(raiz->direita);
+    }
+}
+
+// raizEstatica -> raiz que não muda (necessária para a busca)
+void mostrarRotas(No *raiz, No *raizEstatica){
+    Ponto *pontoInicial = NULL;
+    Aresta *arestaBase = NULL;
+    No *noDestino = NULL;
+
+    if(raiz){
+        mostrarRotas(raiz->esquerda, raizEstatica);
+
+        pontoInicial = raiz->ponto;
+        arestaBase = pontoInicial->ligacoesCidades;
+        if(arestaBase){
+            printf("Rotas do Ponto: [%d] %s\n", raiz->id, raiz->nome);
+
+            while(arestaBase != NULL){
+                noDestino = buscarArvore(arestaBase->idDestino, &raizEstatica);
+                printf("-> [%d] %s\n", noDestino->id, noDestino->nome);
+                arestaBase = arestaBase->proximaAresta;
+            }
+
+            printf("\n");
+        }
+
+        mostrarRotas(raiz->direita, raizEstatica);
     }
 }
 
 int main(){
     Grafo *grafo;
     carregarGrafos(&grafo);
+    mostrarRotas(grafo->raiz, grafo->raiz);
     return 0;
 }
